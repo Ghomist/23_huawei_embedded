@@ -1,8 +1,11 @@
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Scanner;
 import java.util.Set;
@@ -117,7 +120,7 @@ public class Main {
     static int[][] dist;
     static Set<Integer> bridges = new HashSet<>();
     static final List<Edge> externEdges = new ArrayList<>();
-    static final List<String> result = new LinkedList<>();
+    static final Map<Integer, String> result = new HashMap<>();
 
     static void buildMap() {
         final Scanner in = new Scanner(System.in);
@@ -143,10 +146,11 @@ public class Main {
             nodes[n2].edges.add(e);
         }
 
-        trans = new int[transCnt][2];
+        trans = new int[transCnt][3];
         for (int i = 0; i < transCnt; ++i) {
             trans[i][0] = in.nextInt();
             trans[i][1] = in.nextInt();
+            trans[i][2] = i;
         }
 
         dist = new int[nodeCnt][nodeCnt];
@@ -214,6 +218,29 @@ public class Main {
                 }
             }
         }
+    }
+
+    static void sortTrans() {
+        var map = new HashMap<Integer, Integer>();
+        for (var t : trans) {
+            var key = Objects.hash(t[0], t[1]);
+            // var key = t[0] + " " + t[1];
+            if (map.containsKey(key)) {
+                map.put(key, map.get(key) + 1);
+            } else {
+                map.put(key, 1);// 1204034
+            }
+        }
+        Arrays.sort(trans, (a, b) -> {
+            // var keyA = a[0] + " " + a[1];
+            // var keyB = b[0] + " " + b[1];
+            var keyA = Objects.hash(a[0], a[1]);
+            var keyB = Objects.hash(b[0], b[1]);
+            int cmp = -Integer.compare(map.get(keyA), map.get(keyB));
+            if (cmp != 0)
+                return cmp;
+            return -Integer.compare(dist[a[0]][a[1]], dist[b[0]][b[1]]);
+        });
     }
 
     static void testCapacity() {
@@ -427,7 +454,7 @@ public class Main {
         return ans;
     }
 
-    static void applyPath(Path path) {
+    static void applyPath(Path path, int index) {
         var edges = path.edges;
         var pass = path.pass;
 
@@ -461,7 +488,7 @@ public class Main {
 
         sb.deleteCharAt(sb.length() - 1);
         // System.out.println(sb);
-        result.add(sb.toString());
+        result.put(index, sb.toString());
     }
 
     static void output() {
@@ -469,15 +496,21 @@ public class Main {
         for (var ex : externEdges) {
             System.out.println(ex.n1 + " " + ex.n2);
         }
-        for (var line : result) {
-            System.out.println(line);
+        // plz!!!!
+        for (int i = 0; i < transCnt; i++) {
+            var resultI = result.get(i);
+            System.out.println(resultI);
         }
+        // for (var line : result) {
+        // System.out.println(line);
+        // }
     }
 
     public static void main(String[] args) {
         buildMap();
         buildDistField();
-        bridges = findBridges();
+        // bridges = findBridges();
+        // sortTrans();
         // testCapacity();
         for (var t : trans) {
             Path minPath = null;
@@ -490,7 +523,7 @@ public class Main {
                     }
                 }
             }
-            applyPath(minPath);
+            applyPath(minPath, t[2]);
         }
         output();
     }
