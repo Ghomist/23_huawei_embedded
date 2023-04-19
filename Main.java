@@ -355,10 +355,10 @@ public class Main {
         }
     }
 
-    static Path findBestPath(final int start, final int end, List<Edge> prior) {
+    static Path findBestPath(final int start, final int end, List<Edge> avoid, List<Edge> prior) {
         Path minPath = null;
         for (int pass = 0; pass < passCnt; pass++) {
-            var path = findPath(start, end, pass, prior);
+            var path = findPath(start, end, pass, avoid, prior);
             if (path != null) {
                 int cost = path.cost;
                 if (minPath == null || cost < minPath.cost) {
@@ -376,7 +376,7 @@ public class Main {
      * @param end   终点
      * @param pass  使用的通道
      */
-    static Path findPath(final int start, final int end, final int pass, List<Edge> prior) {
+    static Path findPath(final int start, final int end, final int pass, List<Edge> avoid, List<Edge> prior) {
         var preEdge = new Edge[nodeCnt];
         var cost = new int[nodeCnt];
         var visiting = new PriorityQueue<Node>((a, b) -> {
@@ -396,6 +396,8 @@ public class Main {
             }
             // traverse all edges
             for (var edge : node.edges) {
+                if (avoid != null && avoid.contains(edge))
+                    continue;
                 // next node idx
                 int next = edge.other(node.id);
                 // cal new g
@@ -495,18 +497,8 @@ public class Main {
 
     static void replanPath(List<Edge> newEdges) {
         // TODO: 会超时
-        // if (result.size() > 30)
+        // if (result.size() > 50)
         //     return;
-        // release passes
-        for (var path : result.values()) {
-            // no extern edge
-            if (path.extern.isEmpty())
-                continue;
-
-            for (var edge : path.edges) {
-                edge.releasePass(path.pass);
-            }
-        }
 
         // replan
         for (int trans : result.keySet()) {
@@ -516,8 +508,13 @@ public class Main {
             if (path.extern.isEmpty())
                 continue;
 
-            var best = findBestPath(path.start, path.end, newEdges);
-            if (best.cost < path.cost) {
+            // release passes
+            for (var edge : path.edges) {
+                edge.releasePass(path.pass);
+            }
+
+            var best = findBestPath(path.start, path.end, path.extern, newEdges);
+            if (best != null && best.cost < path.cost) {
                 result.put(trans, best);
             }
         }
@@ -568,7 +565,7 @@ public class Main {
         // sortTrans();
         // testCapacity();
         for (var t : trans) {
-            var best = findBestPath(t[0], t[1], null);
+            var best = findBestPath(t[0], t[1], null, null);
             applyPath(best);
             // if has extern edges
             if (!best.extern.isEmpty()) {
