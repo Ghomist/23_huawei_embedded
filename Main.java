@@ -25,7 +25,7 @@ class Node {
 }
 
 class Edge {
-    public final int id;
+    public int id;
     public final int n1;
     public final int n2;
     public final int dist;
@@ -47,6 +47,11 @@ class Edge {
     public void takePass(int pass) {
         this.pass[pass] = true;
         cnt++;
+    }
+
+    public void releasePass(int pass) {
+        this.pass[pass] = false;
+        cnt--;
     }
 
     public boolean isTaken(int pass) {
@@ -120,7 +125,7 @@ public class Main {
     static int[][] dist;
     static Set<Integer> bridges = new HashSet<>();
     static final List<Edge> externEdges = new ArrayList<>();
-    static final Map<Integer, String> result = new HashMap<>();
+    static final Map<Integer, Path> result = new HashMap<>();
 
     static void buildMap() {
         final Scanner in = new Scanner(System.in);
@@ -350,6 +355,20 @@ public class Main {
         }
     }
 
+    static Path findBestPath(final int start, final int end, List<Edge> prior) {
+        Path minPath = null;
+        for (int pass = 0; pass < passCnt; pass++) {
+            var path = findPath(start, end, pass, prior);
+            if (path != null) {
+                int cost = path.cost;
+                if (minPath == null || cost < minPath.cost) {
+                    minPath = path;
+                }
+            }
+        }
+        return minPath;
+    }
+
     /**
      * A* 寻路
      * 
@@ -357,7 +376,7 @@ public class Main {
      * @param end   终点
      * @param pass  使用的通道
      */
-    static Path findPath(final int start, final int end, final int pass) {
+    static Path findPath(final int start, final int end, final int pass, List<Edge> prior) {
         var preEdge = new Edge[nodeCnt];
         var cost = new int[nodeCnt];
         var visiting = new PriorityQueue<Node>((a, b) -> {
@@ -383,16 +402,19 @@ public class Main {
                 int newCost = cost[node.id] + edge.dist;
 
                 // pass has been taken, increase the cost
-                if (edge.isTaken(pass)) {
-                    if (bridges.contains(edge.id)) {
-                        // edge is bridge
+                // or this is extern edge, increase as well
+                if (edge.isTaken(pass) || edge.id >= edgeCnt) {
+                    if ((prior != null && prior.contains(edge)) || bridges.contains(edge.id)) {
+                        // edge is bridge or prior
                         newCost += EDGE_COST / 20;
                     } else {
                         newCost += EDGE_COST * (passCnt - edge.getTakenPassCnt() + 1); // TODO: 以权重控制加边不是最佳方案
                     }
                 }
+
                 // increase cost by pass taken
                 // newCost += edge.getTakenPassCnt() * PASS_COST;
+
                 // update g
                 if (cost[next] == -1 || newCost < cost[next]) {
                     // update array
@@ -454,17 +476,7 @@ public class Main {
         return ans;
     }
 
-    static void applyPath(Path path, int index) {
-        var edges = path.edges;
-        var pass = path.pass;
-
-        var ampList = setAmp(path);
-
-        var sb = new StringBuilder();
-        sb.append(pass).append(' ')
-                .append(edges.size()).append(' ')
-                .append(ampList.size()).append(' ');
-
+    static void applyPath(Path path) {
         // apply extern edges
         externEdges.addAll(path.extern);
         externCnt += path.extern.size();
@@ -474,56 +486,110 @@ public class Main {
         }
 
         // edge
-        for (var edge : edges) {
+        var pass = path.pass;
+        for (var edge : path.edges) {
             // take pass
             edge.takePass(pass);
-            // output
-            sb.append(edge.id).append(' ');
+        }
+    }
+
+    static void replanPath(List<Edge> newEdges) {
+        // TODO: 会超时
+        // if (result.size() > 30)
+        //     return;
+        // release passes
+        for (var path : result.values()) {
+            // no extern edge
+            if (path.extern.isEmpty())
+                continue;
+
+            for (var edge : path.edges) {
+                edge.releasePass(path.pass);
+            }
         }
 
-        // make amplifier
-        for (var amp : ampList) {
-            sb.append(amp).append(' ');
-        }
+        // replan
+        for (int trans : result.keySet()) {
+            var path = result.get(trans);
 
-        sb.deleteCharAt(sb.length() - 1);
-        // System.out.println(sb);
-        result.put(index, sb.toString());
+            // no extern edge
+            if (path.extern.isEmpty())
+                continue;
+
+            var best = findBestPath(path.start, path.end, newEdges);
+            if (best.cost < path.cost) {
+                result.put(trans, best);
+            }
+        }
     }
 
     static void output() {
-        System.out.println(externCnt);
+        var sb = new StringBuilder();
+
+        sb.append(externEdges.size()).append('\n');
         for (var ex : externEdges) {
-            System.out.println(ex.n1 + " " + ex.n2);
+            sb.append(ex.n1).append(' ').append(ex.n2).append('\n');
         }
+
         // plz!!!!
         for (int i = 0; i < transCnt; i++) {
-            var resultI = result.get(i);
-            System.out.println(resultI);
+            var path = result.get(i);
+
+            var edges = path.edges;
+            var pass = path.pass;
+
+            var ampList = setAmp(path);
+
+            sb.append(pass).append(' ')
+                    .append(edges.size()).append(' ')
+                    .append(ampList.size()).append(' ');
+
+            // edge
+            for (var edge : edges) {
+                sb.append(edge.id).append(' ');
+            }
+
+            // make amplifier
+            for (var amp : ampList) {
+                sb.append(amp).append(' ');
+            }
+
+            sb.deleteCharAt(sb.length() - 1).append('\n');
         }
-        // for (var line : result) {
-        // System.out.println(line);
-        // }
+
+        System.out.print(sb);
     }
 
     public static void main(String[] args) {
+        // 你的声音好好听！爱你！！❤
         buildMap();
         buildDistField();
-        // bridges = findBridges();
+        bridges = findBridges();
         // sortTrans();
         // testCapacity();
         for (var t : trans) {
-            Path minPath = null;
-            for (int pass = 0; pass < passCnt; pass++) {
-                var path = findPath(t[0], t[1], pass);
-                if (path != null) {
-                    int cost = path.cost;
-                    if (minPath == null || cost < minPath.cost) {
-                        minPath = path;
-                    }
-                }
+            var best = findBestPath(t[0], t[1], null);
+            applyPath(best);
+            // if has extern edges
+            if (!best.extern.isEmpty()) {
+                replanPath(best.extern);
             }
-            applyPath(minPath, t[2]);
+            // record current path after replan
+            result.put(t[2], best);
+        }
+        // arrangement extern edges
+        int exIndex = edgeCnt;
+        var it = externEdges.iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            // no taken pass, can be remove
+            if (e.getTakenPassCnt() == 0) {
+                it.remove();
+            } else {
+                // else reorder index (id)
+                e.id = exIndex;
+                exIndex++;
+            }
         }
         output();
     }
