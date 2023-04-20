@@ -30,13 +30,17 @@ class Edge {
     public final int n2;
     public final int dist;
     private final boolean[] pass;
+
+    public int flow;
+
     private int cnt = 0;
 
-    Edge(int id, int n1, int n2, int dist, int passCnt) {
+    Edge(int id, int n1, int n2, int dist, int flow, int passCnt) {
         this.dist = dist;
         this.id = id;
         this.n1 = n1;
         this.n2 = n2;
+        this.flow = flow;
         this.pass = new boolean[passCnt];
     }
 
@@ -93,6 +97,10 @@ class Util {
         return min;
     }
 
+    public static int greatThanZero(int n) {
+        return n >= 0 ? n : 0;
+    }
+
     public static Edge shortestEdgeBetween(Node a, Node b) {
         Edge res = null;
         for (Edge edge : a.edges) {
@@ -111,6 +119,8 @@ class Util {
 public class Main {
     static final int EDGE_COST = 1000000;
     static final int PASS_COST = 6;
+    static final int TOTAL_FLOW = 128;
+    static final float FLOW_DECADE = 1.5f;
 
     static int nodeCnt, edgeCnt, transCnt, passCnt, maxDist;
     static int externCnt = 0;
@@ -140,7 +150,7 @@ public class Main {
             int n1 = in.nextInt();
             int n2 = in.nextInt();
             int d = in.nextInt();
-            var e = new Edge(i, n1, n2, d, passCnt);
+            var e = new Edge(i, n1, n2, d, 0, passCnt);
             edges[i] = e;
             nodes[n1].edges.add(e);
             nodes[n2].edges.add(e);
@@ -220,6 +230,73 @@ public class Main {
         }
     }
 
+    static void buildFlow() {
+        var flow = new int[edgeCnt];
+        for (var t : trans) {
+            buildFlow(t[0], t[1], flow);
+        }
+        for (int i = 0; i < edgeCnt; ++i) {
+            edges[i].flow = flow[i];
+        }
+    }
+
+    static void buildFlow(final int start, final int end, final int[] flow) {
+        final class NodeForSort {
+            final NodeForSort pre;
+            final Edge e;
+            final Node n;
+            final int g;
+            final int f;
+
+            NodeForSort(Node n, NodeForSort pre, Edge e, int g) {
+                this.pre = pre;
+                this.e = e;
+                this.n = n;
+                this.g = g;
+                f = g + dist[n.id][end];
+            }
+        }
+
+        int remainFlow = transCnt;
+        var visiting = new PriorityQueue<NodeForSort>((a, b) -> Integer.compare(a.f, b.f));
+        visiting.add(new NodeForSort(nodes[start], null, null, 0));
+        while (!visiting.isEmpty() && remainFlow > 0) {
+            var node = visiting.poll();
+            // find end
+            if (node.n.id == end) {
+                var n = node;
+                while (n.pre != null) {
+                    var e = n.e;
+                    // make flow
+                    flow[e.id] += remainFlow;
+                    // previous node
+                    n = n.pre;
+                }
+                remainFlow /= FLOW_DECADE;
+                continue;
+            }
+            // traverse all edges
+            for (var edge : node.n.edges) {
+                // next node idx
+                int next = edge.other(node.n.id);
+                // if current path has been to next node
+                var beenTo = false;
+                var n = node.pre;
+                while (n != null) {
+                    if (n.n.id == next) {
+                        beenTo = true;
+                        break;
+                    } else {
+                        n = n.pre;
+                    }
+                }
+                // expend new node
+                if (!beenTo)
+                    visiting.add(new NodeForSort(nodes[next], node, edge, node.g + edge.dist));
+            }
+        }
+    }
+
     static void sortTrans() {
         var map = new HashMap<Integer, Integer>();
         for (var t : trans) {
@@ -241,78 +318,6 @@ public class Main {
                 return cmp;
             return -Integer.compare(dist[a[0]][a[1]], dist[b[0]][b[1]]);
         });
-    }
-
-    static void testCapacity() {
-        var capacity = new int[edgeCnt];
-        for (var t : trans) {
-            testPath(t[0], t[1], capacity);
-        }
-        for (int i = 0; i < edgeCnt; ++i) {
-            while (capacity[i] > passCnt) {
-                // new edge
-                var e = edges[i];
-                var newD = Util.shortestEdgeBetween(nodes[e.n1], nodes[e.n2]).dist;
-                var newE = new Edge(edgeCnt + externCnt, e.n1, e.n2, newD, passCnt);
-                externCnt++;
-                externEdges.add(newE);
-                nodes[e.n1].edges.add(newE);
-                nodes[e.n2].edges.add(newE);
-                // reduce capacity
-                capacity[i] -= passCnt;
-            }
-        }
-    }
-
-    static void testPath(final int start, final int end, final int[] capacity) {
-        var preEdge = new Edge[nodeCnt];
-        var cost = new int[nodeCnt];
-        var visiting = new PriorityQueue<Node>((a, b) -> {
-            // compare F ( F = g + h )
-            return Integer.compare(cost[a.id] + dist[a.id][end], cost[b.id] + dist[b.id][end]);
-        });
-        Arrays.fill(cost, -1);
-        cost[start] = 0;
-
-        boolean foundEnd = false;
-        visiting.add(nodes[start]);
-        while (!visiting.isEmpty()) {
-            var node = visiting.poll();
-            if (node.id == end) {
-                foundEnd = true;
-                break;
-            }
-            // traverse all edges
-            for (var edge : node.edges) {
-                // next node idx
-                int next = edge.other(node.id);
-                // cal new g
-                int newCost = cost[node.id] + edge.dist;
-                // reach max capacity
-                if (capacity[edge.id] >= passCnt)
-                    newCost += EDGE_COST * (capacity[edge.id] / passCnt);
-                // update g
-                if (cost[next] == -1 || newCost < cost[next]) {
-                    // update array
-                    cost[next] = newCost;
-                    // update pre node
-                    preEdge[next] = edge;
-                    // set new node to visiting (do NOT repeat old node!)
-                    if (!visiting.contains(nodes[next]))
-                        visiting.add(nodes[next]);
-                }
-            }
-        }
-        int n = end;
-        if (foundEnd) {
-            while (preEdge[n] != null) {
-                var e = preEdge[n];
-                // arise capacity
-                capacity[e.id]++;
-                // next node
-                n = e.other(n);
-            }
-        }
     }
 
     static Set<Integer> findBridges() {
@@ -386,9 +391,9 @@ public class Main {
                 if (edge.isTaken(pass)) {
                     if (bridges.contains(edge.id)) {
                         // edge is bridge
-                        newCost += EDGE_COST / 20;
+                        newCost += Util.greatThanZero(EDGE_COST - edge.flow) / 20;
                     } else {
-                        newCost += EDGE_COST * (passCnt - edge.getTakenPassCnt() + 1); // TODO: 以权重控制加边不是最佳方案
+                        newCost += Util.greatThanZero(EDGE_COST - edge.flow) * (passCnt - edge.getTakenPassCnt() + 1);
                     }
                 }
                 // increase cost by pass taken
@@ -416,7 +421,7 @@ public class Main {
                 // if need new edge
                 if (e.isTaken(pass)) {
                     var newD = Util.shortestEdgeBetween(nodes[e.n1], nodes[e.n2]).dist;
-                    var newE = new Edge(externId, e.n1, e.n2, newD, passCnt);
+                    var newE = new Edge(externId, e.n1, e.n2, newD, e.flow, passCnt);
                     externId++;
                     extern.add(newE);
                     e = newE;
@@ -509,7 +514,8 @@ public class Main {
     public static void main(String[] args) {
         buildMap();
         buildDistField();
-        // bridges = findBridges();
+        buildFlow();
+        bridges = findBridges();
         // sortTrans();
         // testCapacity();
         for (var t : trans) {
