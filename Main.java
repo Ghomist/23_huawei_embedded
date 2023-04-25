@@ -10,6 +10,8 @@ import java.util.PriorityQueue;
 import java.util.Scanner;
 import java.util.Set;
 
+import javax.naming.spi.DirStateFactory.Result;
+
 class Node {
     public final int id;
     public final LinkedList<Edge> edges = new LinkedList<>();
@@ -148,6 +150,66 @@ class Util {
     }
 }
 
+class Solution {
+    final Path[] paths;
+    final int cost;
+    final Set<Constraint> constraints;
+
+    Solution(Path[] paths) {
+        this.paths = paths;
+        int cost = 0;
+        for (var p : paths) {
+            cost += p.cost;
+        }
+        this.cost = cost;
+        this.constraints = new HashSet<>();
+    }
+
+    Solution(Path[] paths, Set<Constraint> constraints) {
+        this.paths = paths;
+        int cost = 0;
+        for (var p : paths) {
+            cost += p.cost;
+        }
+        this.cost = cost;
+        this.constraints = constraints;
+    }
+
+}
+
+class Constraint {
+    final int edgeID;
+    final int pass;
+
+    public Constraint(int edgeID, int pass) {
+        this.edgeID = edgeID;
+        this.pass = pass;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null || !(obj instanceof Constraint))
+            return false;
+        var other = (Constraint) obj;
+        return edgeID == other.edgeID && pass == other.pass;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(edgeID, pass);
+    }
+}
+
+// class PassCondition {
+// Edge edge;// every edge
+// boolean[][] pass;// every edge's every pass's condition
+
+// PassCondition(Edge edge, boolean[][] pass) {
+// this.edge = edge;
+// this.pass = pass;
+// }
+// }
+
 public class Main {
     static final long EDGE_COST = 1000000;
     static final int PASS_COST = 6;
@@ -162,7 +224,7 @@ public class Main {
     static int externCnt = 0;
     static Node[] nodes;
     static Edge[] edges;
-    static int[][] trans;
+    public static int[][] trans;
     static int[][] dist;
     static long maxFlow = 0;
     static Set<Integer> bridges = new HashSet<>();
@@ -256,7 +318,7 @@ public class Main {
                     if (visited[next])
                         continue;
 
-                    int d = dist[start][node] + edge.dist;
+                    int d = dist[start][node] + edge.dist + 1;
                     if (d < dist[start][next])
                         dist[start][next] = d;
                 }
@@ -386,6 +448,72 @@ public class Main {
         }
     }
 
+    // findpath with Constraint(No Condtraint:-1 -1)
+    // edge's passNum is nowalk
+    static Path findPath(int start, int end, Set<Constraint> constraints) {
+
+        return null;
+    }
+
+    static Solution bestSolution() {
+        // all solutions queue
+        var minCost = new PriorityQueue<Solution>((a, b) -> {
+            return Integer.compare(a.cost, b.cost);
+        });
+
+        // first solution (no constraint)
+        var paths = new Path[transCnt]; // haolihai!!
+        for (int i = 0; i < transCnt; i++) {
+            paths[i] = findPath(trans[i][0], trans[i][1], null);
+        }
+        minCost.add(new Solution(paths));
+
+        // dive into finding best solution
+        while (true) {
+            var sol = minCost.poll();
+            paths = sol.paths;
+            boolean judge = false;
+            for (int i = 0; i < transCnt - 1; i++) {
+                // 加油！！加油！！你打算用 哪一个思路呀 不知道 写写看
+                for (int j = i + 1; j < transCnt; j++) {
+                    for (int p = 0; p < paths[i].edges.size(); p++) {
+                        Edge edge = paths[i].edges.get(p);
+                        for (int k = 0; k < paths[j].edges.size(); p++) {
+                            if (edge == paths[j].edges.get(k) && paths[i].pass == paths[j].pass) {
+                                Constraint newC = new Constraint(p, paths[i].pass);
+                                Set<Constraint> cSet = new HashSet<>();
+                                cSet.add(newC);
+                                cSet.addAll(sol.constraints);
+                                Path path = findPath(trans[i][0], trans[i][1], cSet);
+                                paths[i] = path;
+                                Solution result1 = new Solution(paths, cSet);
+                                Set<Constraint> lSet = new HashSet<>();
+                                lSet.add(newC);
+                                lSet.addAll(sol.constraints);
+                                path = findPath(trans[j][0], trans[j][1], lSet);
+                                paths[j] = path;
+                                Solution result2 = new Solution(paths, lSet);
+                                minCost.add(result1);
+                                minCost.add(result2);
+                                judge = true;
+                                break;
+                            }
+                        }
+                        if (judge == true)
+                            break;
+                    }
+                    if (judge == true)
+                        break;
+                }
+                if (judge == true)
+                    break;
+            }
+            if (judge == false)
+                return sol;
+        }
+
+    }
+
     /**
      * A* 寻路
      * 
@@ -395,10 +523,10 @@ public class Main {
      */
     static Path findPath(final int start, final int end, final int pass) {
         var preEdge = new Edge[nodeCnt];
-        var cost = new int[nodeCnt];
+        var cost = new double[nodeCnt];
         var visiting = new PriorityQueue<Node>((a, b) -> {
             // compare F ( F = g + h )
-            return Integer.compare(cost[a.id] + dist[a.id][end], cost[b.id] + dist[b.id][end]);
+            return Double.compare(cost[a.id] + dist[a.id][end], cost[b.id] + dist[b.id][end]);
         });
         Arrays.fill(cost, -1);
         cost[start] = 0;
@@ -416,14 +544,14 @@ public class Main {
                 // next node idx
                 int next = edge.other(node.id);
                 // cal new g
-                int newCost = cost[node.id] + edge.dist;
+                double newCost = cost[node.id] + (double) edge.dist / maxDist + 1;
                 // pass has been taken, increase the cost
                 if (edge.isTaken(pass)) {
                     if (bridges.contains(edge.id)) {
                         // edge is bridge
                         newCost += EDGE_COST * (2 - ((double) edge.flow / maxFlow)) / 20;
                     } else {
-                        newCost += EDGE_COST * (2 - ((double) edge.flow / maxFlow)) ;
+                        newCost += EDGE_COST * (2 - ((double) edge.flow / maxFlow));
                         // * (passCnt + edge.getTakenPassCnt() + 1);
                     }
                 }
@@ -543,7 +671,7 @@ public class Main {
     public static void main(String[] args) {
         buildMap();
         buildDistField();
-        buildFlow();
+        // buildFlow();
         bridges = findBridges();
         // sortTrans();
         // testCapacity();
