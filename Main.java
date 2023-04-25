@@ -68,11 +68,11 @@ class Path {
     final List<Edge> extern;
     final int start;
     final int end;
-    final int cost;
+    final double cost;
     final int dist;
     final int pass;
 
-    Path(int start, int end, List<Edge> edges, List<Edge> extern, int cost, int dist, int pass) {
+    Path(int start, int end, List<Edge> edges, List<Edge> extern, double cost, int dist, int pass) {
         this.extern = extern;
         this.end = end;
         this.start = start;
@@ -165,57 +165,72 @@ public class Main {
      * 生成距离场
      */
     static void buildDistField() {
-        // ( >u< )丿✨ hi~~ [❤ love u, my dear ❤] ~~
+        // ( >u< )丿 hi~~ [ love u, my dear ] ~~
         // Zzq ❤ Wxr
         for (int i = 0; i < dist.length; ++i) {
             dist[i][i] = 0;
         }
-        for (int i = 0; i < nodeCnt; ++i) {
-            int start = i;
-            int end = i;
-            for (Edge edge : nodes[start].edges) {
-                end = edge.other(start);
-                // var min = nodes[start].getMinEdgeTo(end).dist; // 这个地方接口换了
-                var min = Util.shortestEdgeBetween(nodes[start], nodes[end]).dist;
-                dist[start][end] = min;
-                dist[end][start] = min;
-            }
-        }
+        // for (int i = 0; i < nodeCnt; ++i) {
+        // int start = i;
+        // int end = i;
+        // for (Edge edge : nodes[start].edges) {
+        // end = edge.other(start);
+        // // var min = nodes[start].getMinEdgeTo(end).dist; // 这个地方接口换了
+        // var min = Util.shortestEdgeBetween(nodes[start], nodes[end]).dist;
+        // dist[start][end] = min;
+        // dist[end][start] = min;
+        // }
+        // }
 
-        for (int i = 0; i < nodeCnt; ++i) {
-            boolean[] visited = new boolean[nodeCnt];
-            int start = i;
-            int end = i;
+        for (int start = 0; start < nodeCnt; ++start) {
+            var visited = new boolean[nodeCnt];
+            // for (int i = 0; i < start; ++i) {
+            // visited[i] = true;
+            // dist[start][i] = dist[i][start];
+            // }
+
             visited[start] = true;
-            int minx = Integer.MAX_VALUE;
 
             for (int j = 0; j < nodeCnt; ++j) {
-                minx = Integer.MAX_VALUE;
+                int node = start;
+                int minDist = Integer.MAX_VALUE;
                 for (int k = 0; k < nodeCnt; ++k) {
-                    if (!visited[k] && minx > dist[start][k]) {
-                        minx = dist[start][k];
-                        end = k;
+                    if (!visited[k] && minDist > dist[start][k]) {
+                        minDist = dist[start][k];
+                        node = k;
                     }
                 }
 
-                visited[end] = true;
+                visited[node] = true;
 
-                for (int p = 0; p < nodeCnt; ++p) {
-                    if (visited[p])
+                for (var edge : nodes[node].edges) {
+                    int next = edge.other(node);
+
+                    if (visited[next])
                         continue;
-                    int node2 = 0;
-                    int distance = Integer.MAX_VALUE;
-                    for (Edge edge : nodes[end].edges) {
-                        node2 = edge.other(end);
-                        // var min = nodes[end].getMinEdgeTo(node2).dist;
-                        var min = Util.shortestEdgeBetween(nodes[end], nodes[node2]).dist;
-                        if (node2 == p)
-                            distance = min;
-                    }
-                    if (distance != Integer.MAX_VALUE && dist[start][p] > dist[start][end] + distance) {
-                        dist[start][p] = dist[start][end] + distance;
-                    }
+
+                    int d = dist[start][node] + edge.dist + 1;
+                    if (d < dist[start][next])
+                        dist[start][next] = d;
                 }
+
+                // for (int p = 0; p < nodeCnt; ++p) {
+                // if (visited[p])
+                // continue;
+                // int node2 = 0;
+                // int distance = Integer.MAX_VALUE;
+                // for (Edge edge : nodes[node].edges) {
+                // node2 = edge.other(node);
+                // // var min = nodes[end].getMinEdgeTo(node2).dist;
+                // var min = Util.shortestEdgeBetween(nodes[node], nodes[node2]).dist;
+                // if (node2 == p)
+                // distance = min;
+                // }
+                // if (distance != Integer.MAX_VALUE && dist[start][p] > dist[start][node] +
+                // distance) {
+                // dist[start][p] = dist[start][node] + distance;
+                // }
+                // }
             }
         }
     }
@@ -359,10 +374,10 @@ public class Main {
      */
     static Path findPath(final int start, final int end, final int pass) {
         var preEdge = new Edge[nodeCnt];
-        var cost = new int[nodeCnt];
+        var cost = new double[nodeCnt];
         var visiting = new PriorityQueue<Node>((a, b) -> {
             // compare F ( F = g + h )
-            return Integer.compare(cost[a.id] + dist[a.id][end], cost[b.id] + dist[b.id][end]);
+            return Double.compare(cost[a.id] + dist[a.id][end], cost[b.id] + dist[b.id][end]);
         });
         Arrays.fill(cost, -1);
         cost[start] = 0;
@@ -380,7 +395,7 @@ public class Main {
                 // next node idx
                 int next = edge.other(node.id);
                 // cal new g
-                int newCost = cost[node.id] + edge.dist;
+                double newCost = cost[node.id] + (double) edge.dist / maxDist + 1;
 
                 // pass has been taken, increase the cost
                 if (edge.isTaken(pass)) {
@@ -509,7 +524,7 @@ public class Main {
     public static void main(String[] args) {
         buildMap();
         buildDistField();
-        // bridges = findBridges();
+        bridges = findBridges();
         // sortTrans();
         // testCapacity();
         for (var t : trans) {
@@ -517,7 +532,7 @@ public class Main {
             for (int pass = 0; pass < passCnt; pass++) {
                 var path = findPath(t[0], t[1], pass);
                 if (path != null) {
-                    int cost = path.cost;
+                    var cost = path.cost;
                     if (minPath == null || cost < minPath.cost) {
                         minPath = path;
                     }
