@@ -1,5 +1,6 @@
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -7,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
 
@@ -525,6 +527,9 @@ public class Main {
         buildMap();
         buildDistField();
         bridges = findBridges();
+        var ts = Arrays.asList(trans);
+        Collections.shuffle(ts);
+        ts.toArray(trans);
         // sortTrans();
         // testCapacity();
         for (var t : trans) {
