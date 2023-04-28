@@ -172,40 +172,67 @@ public class Main {
         for (int i = 0; i < dist.length; ++i) {
             dist[i][i] = 0;
         }
+        // for (int i = 0; i < nodeCnt; ++i) {
+        // int start = i;
+        // int end = i;
+        // for (Edge edge : nodes[start].edges) {
+        // end = edge.other(start);
+        // // var min = nodes[start].getMinEdgeTo(end).dist; // 这个地方接口换了
+        // var min = Util.shortestEdgeBetween(nodes[start], nodes[end]).dist;
+        // dist[start][end] = min;
+        // dist[end][start] = min;
+        // }
+        // }
 
         for (int start = 0; start < nodeCnt; ++start) {
-            var closed = new boolean[nodeCnt];
-            var power = new int[nodeCnt];
+            var visited = new boolean[nodeCnt];
+            // for (int i = 0; i < start; ++i) {
+            // visited[i] = true;
+            // dist[start][i] = dist[i][start];
+            // }
 
-            closed[start] = true;
-            power[start] = maxDist;
+            visited[start] = true;
 
             for (int j = 0; j < nodeCnt; ++j) {
                 int node = start;
                 int minDist = Integer.MAX_VALUE;
                 for (int k = 0; k < nodeCnt; ++k) {
-                    if (!closed[k] && minDist > dist[start][k]) {
+                    if (!visited[k] && minDist > dist[start][k]) {
                         minDist = dist[start][k];
                         node = k;
                     }
                 }
 
-                closed[node] = true;
+                visited[node] = true;
 
                 for (var edge : nodes[node].edges) {
                     int next = edge.other(node);
 
-                    if (closed[next])
+                    if (visited[next])
                         continue;
 
-                    int remainPower = power[node] - edge.dist;
-                    // int cost = dist[start][node] + (remainPower < 0 ? 100 : 0) + 1;
-                    int cost = dist[start][node] + edge.dist + 1;
-                    if (cost < dist[start][next]) {
-                        dist[start][next] = cost;
-                        power[next] = remainPower < 0 ? maxDist : remainPower;
-                    }
+                    int d = dist[start][node] + edge.dist + 1;
+                    if (d < dist[start][next])
+                        dist[start][next] = d;
                 }
+
+                // for (int p = 0; p < nodeCnt; ++p) {
+                // if (visited[p])
+                // continue;
+                // int node2 = 0;
+                // int distance = Integer.MAX_VALUE;
+                // for (Edge edge : nodes[node].edges) {
+                // node2 = edge.other(node);
+                // // var min = nodes[end].getMinEdgeTo(node2).dist;
+                // var min = Util.shortestEdgeBetween(nodes[node], nodes[node2]).dist;
+                // if (node2 == p)
+                // distance = min;
+                // }
+                // if (distance != Integer.MAX_VALUE && dist[start][p] > dist[start][node] +
+                // distance) {
+                // dist[start][p] = dist[start][node] + distance;
+                // }
+                // }
             }
         }
     }
