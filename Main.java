@@ -120,10 +120,12 @@ public class Main {
     static Edge[] edges;
     static int[][] trans;
     static int[][] dist;
+    static List<Integer> passShuffleList;
     static int pathCnt;
     static Set<Integer> bridges = new HashSet<>();
     static final List<Edge> externEdges = new ArrayList<>();
     static final Map<Integer, List<String>> result = new HashMap<>();
+    static final float expectExternEdgeCnt = 0;
 
     static void buildMap() {
         final Scanner in = new Scanner(System.in);
@@ -448,6 +450,9 @@ public class Main {
             sb.append(amp).append(' ');
         }
 
+        // if (path.extern.size() > expectExternEdgeCnt)
+        // expectExternEdgeCnt += 0.1f;
+
         sb.deleteCharAt(sb.length() - 1);
         // System.out.println(sb);
         if (!result.containsKey(index)) {
@@ -482,23 +487,38 @@ public class Main {
         ts.toArray(trans);
     }
 
+    static void initRandomPass() {
+        passShuffleList = new ArrayList<>(passCnt);
+        for (int i = 0; i < passCnt; i++) {
+            passShuffleList.add(i);
+        }
+    }
+
     public static void main(String[] args) {
         buildMap();
         buildDistField();
+        initRandomPass();
         bridges = findBridges();
         shuffleTrans();
         // sortTrans();
         // testCapacity();
+        int transHandledCnt = 0;
+        final int passUsed = passCnt * 2 / 3;
         for (var t : trans) {
+            // if (transHandledCnt == transCnt / 2)
+            // expectExternEdgeCnt = 0;
             if (t[2] == 2) {
                 Path minPath = null;
-                int pass = 0;
-                for (pass = 0; pass < passCnt; pass++) {
+                Collections.shuffle(passShuffleList);
+                for (int r = 0; r < (transHandledCnt > 5000 ? passUsed : passCnt); ++r) {
+                    int pass = passShuffleList.get(r);
                     var path = findPath(t[0], t[1], pass);
                     if (path != null) {
                         var cost = path.cost;
                         if (minPath == null || cost < minPath.cost) {
                             minPath = path;
+                            if (transHandledCnt > 5000 && minPath.extern.size() == 0)
+                                break;
                         }
                     }
                 }
@@ -515,23 +535,29 @@ public class Main {
                 for (int i = 0; i < t[2]; ++i) {
                     // find a min path
                     Path minPath = null;
-                    for (int pass = 0; pass < passCnt; pass++) {
+                    Collections.shuffle(passShuffleList);
+                    for (int r = 0; r < (transHandledCnt > 5000 ? passUsed : passCnt); ++r) {
+                        int pass = passShuffleList.get(r);
                         var path = findPath(t[0], t[1], pass, avoid);
                         if (path != null) {
                             var cost = path.cost;
                             if (minPath == null || cost < minPath.cost) {
                                 minPath = path;
+                                if (transHandledCnt > 5000 && minPath.extern.size() == 0)
+                                    break;
                             }
                         }
                     }
                     // apply
                     applyPath(minPath, t[3]);
                     // add edge to set
-                    for (var edge : minPath.edges) {
-                        avoid.add(edge.id);
-                    }
+                    if (i != t[2] - 1)
+                        for (var edge : minPath.edges) {
+                            avoid.add(edge.id);
+                        }
                 }
             }
+            transHandledCnt++;
         }
         output();
     }
