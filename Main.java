@@ -120,15 +120,17 @@ public class Main {
     static Edge[] edges;
     static int[][] trans;
     static int[][] dist;
+    static int pathCnt;
     static Set<Integer> bridges = new HashSet<>();
     static final List<Edge> externEdges = new ArrayList<>();
-    static final Map<Integer, String> result = new HashMap<>();
+    static final Map<Integer, List<String>> result = new HashMap<>();
 
     static void buildMap() {
         final Scanner in = new Scanner(System.in);
         nodeCnt = in.nextInt();
         edgeCnt = in.nextInt();
         transCnt = in.nextInt();
+        pathCnt = in.nextInt();
         passCnt = in.nextInt();
         maxDist = in.nextInt();
 
@@ -148,11 +150,12 @@ public class Main {
             nodes[n2].edges.add(e);
         }
 
-        trans = new int[transCnt][3];
+        trans = new int[transCnt][4];
         for (int i = 0; i < transCnt; ++i) {
             trans[i][0] = in.nextInt();
             trans[i][1] = in.nextInt();
-            trans[i][2] = i;
+            trans[i][2] = in.nextInt();
+            trans[i][3] = i;
         }
 
         dist = new int[nodeCnt][nodeCnt];
@@ -295,14 +298,21 @@ public class Main {
         }
     }
 
+    static final Set<Integer> EMPTY_SET = new HashSet<>();
+
+    static Path findPath(final int start, final int end, final int pass) {
+        return findPath(start, end, pass, EMPTY_SET);
+    }
+
     /**
      * A* 寻路
      * 
-     * @param start 起点
-     * @param end   终点
-     * @param pass  使用的通道
+     * @param start        起点
+     * @param end          终点
+     * @param pass         使用的通道
+     * @param avoidEdgeIDs 限制边的 id
      */
-    static Path findPath(final int start, final int end, final int pass) {
+    static Path findPath(final int start, final int end, final int pass, final Set<Integer> avoidEdgeIDs) {
         var preEdge = new Edge[nodeCnt];
         var cost = new double[nodeCnt];
         var power = new int[nodeCnt];
@@ -330,8 +340,12 @@ public class Main {
                 var remainPower = power[node.id] - edge.dist;
                 // cal new g
                 double newCost = cost[node.id] + (remainPower < 0 ? 100 : 0) + 1;
+                // avoid edges
+                if (avoidEdgeIDs.contains(edge.id)) {
+                    newCost += EDGE_COST;
+                }
                 // pass has been taken, increase the cost
-                if (edge.isTaken(pass)) {
+                else if (edge.isTaken(pass)) {
                     if (bridges.contains(edge.id)) {
                         // edge is bridge
                         newCost += EDGE_COST / 20;
@@ -362,7 +376,7 @@ public class Main {
             while (preEdge[n] != null) {
                 var e = preEdge[n];
                 // if need new edge
-                if (e.isTaken(pass)) {
+                if (avoidEdgeIDs.contains(e.id) || e.isTaken(pass)) {
                     var newD = Util.shortestEdgeBetween(nodes[e.n1], nodes[e.n2]).dist;
                     var newE = new Edge(externId, e.n1, e.n2, newD, passCnt);
                     externId++;
@@ -436,7 +450,13 @@ public class Main {
 
         sb.deleteCharAt(sb.length() - 1);
         // System.out.println(sb);
-        result.put(index, sb.toString());
+        if (!result.containsKey(index)) {
+            var list = new LinkedList<String>();
+            list.add(sb.toString());
+            result.put(index, list);
+        } else {
+            result.get(index).add(sb.toString());
+        }
     }
 
     static void output() {
@@ -447,7 +467,9 @@ public class Main {
         // plz!!!!
         for (int i = 0; i < transCnt; i++) {
             var resultI = result.get(i);
-            System.out.println(resultI);
+            for (var edge : resultI) {
+                System.out.println(edge);
+            }
         }
         // for (var line : result) {
         // System.out.println(line);
@@ -468,17 +490,48 @@ public class Main {
         // sortTrans();
         // testCapacity();
         for (var t : trans) {
-            Path minPath = null;
-            for (int pass = 0; pass < passCnt; pass++) {
-                var path = findPath(t[0], t[1], pass);
-                if (path != null) {
-                    var cost = path.cost;
-                    if (minPath == null || cost < minPath.cost) {
-                        minPath = path;
+            if (t[2] == 2) {
+                Path minPath = null;
+                int pass = 0;
+                for (pass = 0; pass < passCnt; pass++) {
+                    var path = findPath(t[0], t[1], pass);
+                    if (path != null) {
+                        var cost = path.cost;
+                        if (minPath == null || cost < minPath.cost) {
+                            minPath = path;
+                        }
+                    }
+                }
+                applyPath(minPath, t[3]);
+                var avoid = new HashSet<Integer>();
+                for (var edge : minPath.edges) {
+                    avoid.add(edge.id);
+                }
+                minPath = findPath(t[0], t[1], minPath.pass, avoid);
+                applyPath(minPath, t[3]);
+            } else {
+                // need to avoid some edges
+                var avoid = new HashSet<Integer>();
+                for (int i = 0; i < t[2]; ++i) {
+                    // find a min path
+                    Path minPath = null;
+                    for (int pass = 0; pass < passCnt; pass++) {
+                        var path = findPath(t[0], t[1], pass, avoid);
+                        if (path != null) {
+                            var cost = path.cost;
+                            if (minPath == null || cost < minPath.cost) {
+                                minPath = path;
+                            }
+                        }
+                    }
+                    // apply
+                    applyPath(minPath, t[3]);
+                    // add edge to set
+                    for (var edge : minPath.edges) {
+                        avoid.add(edge.id);
                     }
                 }
             }
-            applyPath(minPath, t[2]);
         }
         output();
     }
